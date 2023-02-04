@@ -55,8 +55,7 @@ include_directories(Core/Inc
         Drivers/CMSIS/Device/ST/STM32F1xx/Include
         Drivers/CMSIS/Include
         UserApp/serial
-        UserApp
-        )
+        UserApp)
 
 add_definitions(-DUSE_HAL_DRIVER -DSTM32F103xB)
 
