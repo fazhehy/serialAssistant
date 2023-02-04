@@ -1,2 +1,4 @@
 /.idea/
 /code/cmake-build-debug-mingw-qt/
+/example/.idea/
+/example/cmake-build-debug/
