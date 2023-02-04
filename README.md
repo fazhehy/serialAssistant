@@ -26,7 +26,7 @@ PID调参收发数据有一个通信协议，比野火的那个简单，但也�
 
 ## 如何使用
 
-项目有个文件夹`` release``, 直接运行``serialAssisant.exe``即可。
+[下载](https://github.com/fazhehy/serialAssistant/releases)`zip`后解压直接运行``serialAssisant.exe``即可。
 
 `code`文件夹有源代码，可以在此基础上改进`serialAssisant`。
 
