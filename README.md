@@ -6,7 +6,7 @@
 
 1.数据收发界面
 
-![](docs\widget_1.png)
+![](docs/widget_1.png)
 
 2.PID调参界面
 
