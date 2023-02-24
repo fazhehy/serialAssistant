@@ -406,6 +406,7 @@ short Serial::frame::byte2short(char *arr)
 Serial::Serial()
 {
     serial = new QSerialPort;
+    protocolFlag = false;
     connect(serial, &QSerialPort::readyRead, this, [=](){readSlot();});
 }
 
@@ -424,9 +425,9 @@ void Serial::init(const QString& name,
 void Serial::readSlot()
 {
     static int n = 0;
-    int size = readFrame.size();
     if(protocolFlag)
     {
+        int size = readFrame.size();
         char c = static_cast<char>(serial->read(1).toHex().toInt(nullptr, 16));
         if(state == ERROR)
         {
@@ -487,6 +488,7 @@ void Serial::readSlot()
     }
     else
         emit readyRead();
+
 }
 
 void Serial::setReadFrameSize(int size)
@@ -629,6 +631,7 @@ Serial::frame & Serial::writeFrameData()
 
 void Serial::sendFrame()
 {
+    qDebug() << writeFrame.data().toHex(' ');
     serial->write(writeFrame.data());
     writeFrame.clear();
 }

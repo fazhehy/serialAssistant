@@ -19,22 +19,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     void (QTabWidget:: * tabSignal)(int) = &QTabWidget::currentChanged;
     connect(tabWidget, tabSignal, this, [=](){
-        serial->reset();
         if (tabWidget->currentIndex() == 0)
-            serial->resetProtocol();
+            dataWidget->reset();
         else if(tabWidget->currentIndex() == 1)
-            serial->setProtocol("read{"
-                                    "float:2;"
-                                    "}"
-                                "write{"
-                                    "float:4;"
-                                    "}");
+            pidWidget->reset();
     });
 }
 
 void MainWindow::init()
 {
     this->resize(800, 600);
+    this->setWindowTitle("serial assistant");
 
     auto * centralWidget = new QWidget;
     tabWidget->setParent(centralWidget);

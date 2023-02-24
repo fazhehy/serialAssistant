@@ -12,7 +12,6 @@ class Serial {
 public:
     class frame{
     private:
-        uint8_t temp[4] = {0};
         uint8_t * frameData = nullptr;
         bool * boolData = nullptr;
         uint8_t * byteData = nullptr;
@@ -53,6 +52,7 @@ public:
         [[nodiscard]] int FloatNum() const
         {return floatDataNum;}
     public:
+        int Sum = 0;
         frame();
         explicit frame(int boolNum, int byteNum, int shortNum, int intNum, int floatNum);
 
@@ -64,8 +64,9 @@ public:
         {commandMode = true;}
         void resetCommandMode()
         {commandMode = false;}
-        [[nodiscard]] char readCommand() const
-        {return command;}
+        [[nodiscard]] char readCommand()
+        {commandMode = false;
+            return command;}
         void writeCommand(char c)
         {command = c;}
         uint8_t getVerifyCode();
@@ -79,7 +80,7 @@ public:
         bool at(int position, bool *p);
         uint8_t at(int position, uint8_t *p);
         short at(int position, short *p);
-        int at(int position, int *p);
+        int at(int position, uint32_t *p);
         float at(int position, float *p);
 
         static uint8_t * float2byte(float * p);
@@ -108,7 +109,8 @@ private:
 
     bool protocolFlag = false;
     enum State {ERROR=0, DOING=1, SUCCESS=2};
-    State state = ERROR;
+
+    bool analysisFlag = false;
     frame readFrame;
     frame writeFrame;
 public:
@@ -116,6 +118,7 @@ public:
     explicit Serial(UART_HandleTypeDef * pHuart);
 
     void init(UART_HandleTypeDef *pHuart);
+    State state = ERROR;
     void interruptCallback(uint8_t data);
 
     void resizeReadBuffer(uint8_t size);
@@ -129,6 +132,15 @@ public:
     void setProtocol();
     void resetProtocol()
     {protocolFlag = false;}
+    bool analysisIsOver()
+    {
+        if (analysisFlag)
+        {
+            analysisFlag = false;
+            return true;
+        } else
+            return false;
+    }
     frame & readFrameData();
     frame & writeFrameData();
     void sendFrame();

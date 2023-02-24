@@ -9,9 +9,10 @@
 
 uint8_t Serial::frame::getVerifyCode()
 {
-    int sum = 0;
+    uint32_t sum = 0;
     for (int i = 0; i < Size-2; ++i)
-        sum += i;
+        sum += frameData[i];
+    Sum = sum;
     return static_cast<uint8_t>(sum&0xff);
 }
 
@@ -65,17 +66,16 @@ void Serial::frame::setFrame()
         index += byteDataNum;
 
         for (int i = 0; i < shortDataNum; ++i)
-            memcpy(frameData+index+i, short2byte(shortData+i), 2);
+            memcpy(frameData+index+i*2, short2byte(shortData+i), 2);
         index += shortDataNum*2;
 
         for (int i = 0; i < intDataNum; ++i)
-            memcpy(frameData+index+i, int2byte(intData+i), 4);
+            memcpy(frameData+index+i*4, int2byte(intData+i), 4);
         index += intDataNum*4;
 
         for (int i = 0; i < floatDataNum; i+=1)
-            memcpy(frameData+index+i, float2byte(floatData+i), 4);
+            memcpy(frameData+index+i*4, float2byte(floatData+i), 4);
         index += floatDataNum*4;
-
 
         frameData[index++] = getVerifyCode();
         frameData[index] = 0xa5;
@@ -95,12 +95,9 @@ void Serial::frame::analysisFrame()
     currentShortNum = 0;
     currentIntNum = 0;
     currentFloatNum = 0;
-    int index = 0;
-    if (frameData[1] == 0x01)
-        commandMode = true;
-    if(!commandMode)
+    int index = 2;
+    if (!commandMode)
     {
-
         if(boolDataNum != 0) {
             if (boolDataNum <= 8) {
                 uint8_t t = frameData[2];
@@ -134,8 +131,7 @@ void Serial::frame::analysisFrame()
         for (int i = floatDataNum-1; i >= 0; --i)
             floatData[i] = byte2float(frameData+index+i*4);
         index += floatDataNum*4;
-    }
-    else
+    } else
         command = frameData[2];
 
     memset(frameData, 0, Size);
@@ -258,7 +254,7 @@ short Serial::frame::at(int position, short *p)
     }
 }
 
-int Serial::frame::at(int position, int *p)
+int Serial::frame::at(int position, uint32_t *p)
 {
     if(position > intDataNum)
     {
@@ -394,13 +390,17 @@ short Serial::frame::byte2short(uint8_t *arr)
 Serial::Serial()
 {
     readBuffer = new uint8_t [1];
+    readBufferSize = 1;
     writeBuffer = new uint8_t [1];
+    writeBufferSize = 1;
 }
 
 Serial::Serial(UART_HandleTypeDef *pHuart) : huart(pHuart)
 {
     readBuffer = new uint8_t [1];
+    readBufferSize = 1;
     writeBuffer = new uint8_t [1];
+    writeBufferSize = 1;
 }
 
 void Serial::init(UART_HandleTypeDef *pHuart)
@@ -412,7 +412,9 @@ void Serial::interruptCallback(uint8_t data)
 {
     static int n = 0;
     static int index = 0;
+    static bool flag = false;
     int size = readFrame.size();
+    readFrame.resetCommandMode();
     if(protocolFlag)
     {
         if(state == ERROR)
@@ -420,15 +422,22 @@ void Serial::interruptCallback(uint8_t data)
             readFrame.clear();
             n = 0;
         }
-        if(!readFrame.getCommandModeFlag())
+        if (n == 0){
+            if (data == 0x5a)
+                state = DOING;
+            else
+                state = ERROR;
+        }
+        else if(n == 1)
         {
-            if (n == 0){
-                if (data == 0x5a)
-                    state = DOING;
-                else
-                    state = ERROR;
-            }
-            else if(n == size-2)
+            if (data == 0x00)
+                flag = false;
+            else if (data == 0x01)
+                flag = true;
+        }
+        if (!flag)
+        {
+            if(n == size-2)
             {
                 if (data == readFrame.getVerifyCode())
                     state = DOING;
@@ -442,32 +451,28 @@ void Serial::interruptCallback(uint8_t data)
                 else
                     state = ERROR;
             }
-            n++;
-            readFrame.data()[n] = data;
         }
         else
         {
-            if(n == 0)
-            {
-                if (data == 0x5a)
-                    state = DOING;
-                else
-                    state = ERROR;
-            }
-            else if(n == 3)
+            if(n == 3)
             {
                 if (data == 0xa5)
                     state = SUCCESS;
                 else
                     state = ERROR;
             }
-            n++;
-            readFrame.data()[n] = data;
+
         }
-        if(state == SUCCESS)
+        readFrame.data()[n] = data;
+        n++;
+        if (state == SUCCESS)
         {
+            if (flag)
+                readFrame.setCommandMode();
             readFrame.analysisFrame();
+            analysisFlag = SUCCESS;
             state = ERROR;
+            flag = false;
         }
     }
     else

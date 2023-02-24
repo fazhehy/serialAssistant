@@ -4,13 +4,17 @@
 
 #include "PIDWidget.h"
 #include <QLabel>
-#include <QChartView>
+
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QFont>
 #include <QPainter>
+#include <QWheelEvent>
+#include <QGraphicsGridLayout>
+#include <QShortcut>
 
 #include <QDebug>
+#include <QMessageBox>
 
 PIDWidget::PIDWidget(Serial *pSerial, QWidget *parent) : QWidget(parent), serial(pSerial)
 {
@@ -30,45 +34,116 @@ PIDWidget::PIDWidget(Serial *pSerial, QWidget *parent) : QWidget(parent), serial
     stopButton = new QPushButton;
     clearButton = new QPushButton;
     restartButton = new QPushButton;
+    scrollBar = new QScrollBar;
+    chartView = new QChartView;
+    valueBrowser = new QTextBrowser;
+    maxLabel = new QLabel;
+    minLabel = new QLabel;
 
     this->init();
-
-    serial->setProtocol("read{"
-                        "float:2;"
-                        "}"
-                        "write{"
-                        "float:4;"
-                        "}");
-
+    chartView->installEventFilter(this);
     connect(serial, &Serial::analysisOver, this, [=](){
         updateCurve();
     });
 
     connect(sendButton, &QPushButton::clicked, this, [=](){
-        updateData();
+        if(serial->getSerialPort()->isOpen())
+        {
+            updateData();
+            stopButton->setText("暂停");
+            disableZoom = true;
+        }
+        else
+            QMessageBox::warning(this, "警告", "串口已关闭！");
+    });
+
+    auto * shortcut = new QShortcut(this);
+    shortcut->setKey(Qt::Key_Return);
+    shortcut->setAutoRepeat(false);
+
+    connect(shortcut, &QShortcut::activated, this, [=](){
+        if(serial->getSerialPort()->isOpen())
+        {
+            updateData();
+            stopButton->setText("暂停");
+            disableZoom = true;
+        }
+        else
+            QMessageBox::warning(this, "警告", "串口已关闭！");
     });
 
     connect(stopButton, &QPushButton::clicked, this, [=](){
-        serial->writeFrameData().setCommandMode();
-        serial->writeFrameData() << char(0x01);
-        qDebug() << serial->writeFrameData().data().toHex(' ');
-        serial->sendFrame();
-        serial->writeFrameData().resetCommandMode();
+
+        if(serial->getSerialPort()->isOpen())
+        {
+            if (stopButton->text() == "暂停")
+            {
+                stopButton->setText("开始");
+                serial->writeFrameData().setCommandMode();
+                serial->writeFrameData() << char(0x02);
+                serial->sendFrame();
+                serial->writeFrameData().resetCommandMode();
+                disableZoom = false;
+            }
+            else
+            {
+                stopButton->setText("暂停");
+                serial->writeFrameData().setCommandMode();
+                serial->writeFrameData() << char(0x03);
+                serial->sendFrame();
+                serial->writeFrameData().resetCommandMode();
+                disableZoom = true;
+            }
+        }
+        else
+            QMessageBox::warning(this, "警告", "串口已关闭！");
     });
 
     connect(clearButton, &QPushButton::clicked, this, [=](){
         targetLine->clear();
         valueLine->clear();
-        axisX->setRange(0, AXIS_MAX_X);
-        axisY->setRange(0, AXIS_MAX_Y);
+        axisX->setRange(0, 50);
+        axisX->setMax(50);
+        axisY->setRange(-1*1.25, 10*1.25);
+        scrollBar->setMinimum(50);
+        scrollBar->setPageStep(scrollBar->width()+50);
+        scrollBar->setValue(50);
+        max_value = 0;
+        min_value = 0;
+        maxLabel->setText(QString::number(max_value, 'g', 2));
+        minLabel->setText(QString::number(min_value, 'g', 2));
+        clearFlag = true;
     });
 
     connect(restartButton, &QPushButton::clicked, this, [=](){
-        serial->writeFrameData().setCommandMode();
-        serial->writeFrameData() << '\0';
-        serial->sendFrame();
-        serial->writeFrameData().resetCommandMode();
+
+        if(serial->getSerialPort()->isOpen())
+        {
+            serial->writeFrameData().setCommandMode();
+            serial->writeFrameData() << char(0x01);
+            serial->sendFrame();
+            serial->writeFrameData().resetCommandMode();
+            stopButton->setText("暂停");
+            disableZoom = true;
+        }
+        else
+            QMessageBox::warning(this, "警告", "串口已关闭！");
     });
+
+    connect(scrollBar, &QScrollBar::sliderMoved, this, [=](){
+       qDebug() << scrollBar->value();
+       scrollBar->setRange(0, scrollBar->maximum());
+       if (scrollBar->value() > 50)
+           axisX->setRange(scrollBar->value()-50, scrollBar->value());
+       else
+           axisX->setRange(0, 50);
+       rollFlag = false;
+    });
+
+    connect(valueBrowser, &QTextBrowser::textChanged, this,[=](){
+       valueBrowser->moveCursor(QTextCursor::End);
+    });
+
 }
 
 void PIDWidget::updateData()
@@ -80,18 +155,97 @@ void PIDWidget::updateData()
     serial->writeFrameData() << target << P << I << D;
     serial->sendFrame();
     serial->writeFrameData().setCommandMode();
-    serial->writeFrameData() << '\0';
+    serial->writeFrameData() << (char)0x01;
     serial->sendFrame();
     serial->writeFrameData().resetCommandMode();
 }
 
+bool PIDWidget::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == this->chartView)
+    {
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            rollFlag = !rollFlag;
+            scrollBar->setMinimum(50);
+            if (rollFlag)
+            {
+                axisX->setRange(scrollBar->maximum()-50, scrollBar->maximum());
+                scrollBar->setSliderPosition(scrollBar->maximum());
+                disableZoom = true;
+            }
+            else
+                disableZoom = false;
+            return true;
+        }
+        else if (event->type() == QEvent::Wheel)
+        {
+            auto * wheelEvent = dynamic_cast<QWheelEvent *>(event);
+            if (wheelEvent->modifiers() == Qt::ControlModifier)
+            {
+                if (!disableZoom)
+                {
+                    qDebug() << wheelEvent->position().y();
+                    qDebug() << chart->size().height();
+                    double k = (wheelEvent->position().y()-50)/(chart->size().height()-73);
+                    double loc = (axisY->max() - axisY->min())*(1-k)+axisY->min();
+                    double h1 = loc-axisY->min();
+                    double h2 = axisY->max()-loc;
+                    if (wheelEvent->angleDelta().y() > 0)
+                        axisY->setRange(loc-h1*0.75, loc+h2*0.75);
+                    else
+                        axisY->setRange(loc-h1*1.25, loc+h2*1.25);
+                }
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
 void PIDWidget::updateCurve()
 {
+    static QString data;
     serial->readFrameData().at(1, &target);
     serial->readFrameData().at(2, &value);
+    data.append(QString::number(value, 'g', 2)+'\n');
+    if (clearFlag)
+    {
+        data.clear();
+        clearFlag = false;
+    }
+    valueBrowser->setPlainText(data);
+    if (value >= max_value)
+    {
+        max_value = value;
+        maxLabel->setText(QString::number(max_value, 'g', 2));
+    }
+
+    if (value <= min_value)
+    {
+        min_value = value;
+        minLabel->setText(QString::number(min_value, 'g', 2));
+    }
+
+    float tmp_max = max_value>10?max_value:10;
+    float tmp_min = min_value< -1?min_value: -1;
+    if (tmp_max <= target)
+        tmp_max = target;
+    if (tmp_min >= target)
+        tmp_min = target;
+    if (disableZoom)
+        axisY->setRange(tmp_min*1.25, tmp_max*1.25);
     int count = (int) valueLine->points().size();
-    if (count >= AXIS_MAX_X)
-        axisX->setMax(count);
+    if (count >= 50)
+        scrollBar->setRange(50, count);
+    if (rollFlag)
+    {
+        if (count >= 50)
+        {
+            axisX->setRange(count-50, count);
+            scrollBar->setSliderPosition(count);
+        }
+
+    }
     targetLine->append(QPointF(count, target));
     valueLine->append(QPointF(count, value));
 }
@@ -101,12 +255,16 @@ void PIDWidget::init()
     auto * viewWidget = new QWidget(this);
     auto * editWidget = new QWidget(viewWidget);
     auto * buttonWidget = new QWidget(this);
-    auto * chartView = new QChartView(viewWidget);
+    auto * chartWidget = new QWidget(viewWidget);
+    chartView->setParent(chartWidget);
+    valueBrowser->setParent(chartWidget);
+    valueBrowser->setFixedHeight(50);
 
     auto * pValueLabel = new QLabel(pidValueGroup);
     auto * iValueLabel = new QLabel(pidValueGroup);
     auto * dValueLabel = new QLabel(pidValueGroup);
     auto * targetLabel = new QLabel(pidValueGroup);
+
 
     QFont font(QStringLiteral("微软雅黑"), 10);
     QString buttonStyle = QString::fromUtf8("QPushButton{\n"
@@ -130,6 +288,35 @@ void PIDWidget::init()
                                               "}");
 
     editWidget->setFixedWidth(215);
+
+    auto *valueLabel = new QWidget(editWidget);
+    auto * valueLabel_1 = new QWidget(valueLabel);
+    auto * maxLabelTitle = new QLabel(valueLabel_1);
+    maxLabelTitle->setFont(font);
+    maxLabelTitle->setText("最大值");
+    maxLabel->setParent(valueLabel_1);
+    maxLabel->setFont(font);
+    maxLabel->setText(QString::number(max_value, 'g', 2));
+
+    auto * labelLayout_1 = new QVBoxLayout(valueLabel_1);
+    labelLayout_1->addWidget(maxLabelTitle);
+    labelLayout_1->addWidget(maxLabel);
+
+    auto * valueLabel_2 = new QWidget(valueLabel);
+    auto * minLabelTitle = new QLabel(valueLabel_2);
+    minLabelTitle->setFont(font);
+    minLabelTitle->setText("最小值");
+    minLabel->setParent(valueLabel_2);
+    minLabel->setFont(font);
+    minLabel->setText(QString::number(min_value, 'g', 2));
+
+    auto * labelLayout_2 = new QVBoxLayout(valueLabel_2);
+    labelLayout_2->addWidget(minLabelTitle);
+    labelLayout_2->addWidget(minLabel);
+
+    auto * labelLayout = new QHBoxLayout(valueLabel);
+    labelLayout->addWidget(valueLabel_1);
+    labelLayout->addWidget(valueLabel_2);
 
     settingGroup->setParent(editWidget);
 
@@ -189,10 +376,19 @@ void PIDWidget::init()
     restartButton->setFont(font);
     restartButton->setText("重启");
 
-    axisX->setMax(AXIS_MAX_X);
+    axisX->setMax(50);
+//    axisX->setTickCount(50);
+    axisX->setLabelFormat("%d");
+    axisX->setMinorTickCount(5);
+    axisX->setGridLineVisible(true);
     axisX->setMin(0);
-    axisY->setMax(AXIS_MAX_Y);
-    axisY->setMin(0);
+//    axisY->setMax(AXIS_MAX_Y);
+//    axisY->setTickCount(50);
+    axisY->setMinorTickCount(5);
+    axisY->setLabelFormat("%.2f");
+    axisY->setGridLineVisible(true);
+//    axisY->setMin(0);
+    axisY->setRange((min_value< -1?min_value: -1)*1.25, (max_value>10?max_value:10)*1.25);
 
     valueLine->setPointsVisible(true);
     valueLine->setName("Value");
@@ -205,7 +401,9 @@ void PIDWidget::init()
     chart->addAxis(axisY, Qt::AlignLeft);
     chart->addSeries(valueLine);
     chart->addSeries(targetLine);
-    chart->setAnimationOptions(QChart::SeriesAnimations);
+    chart->layout()->setContentsMargins(0, 0, 0, 0);
+    chart->setMargins(QMargins(0, 0, 0, 0));
+//    chart->setAnimationOptions(QChart::SeriesAnimations);
 
     valueLine->attachAxis(axisX);
     valueLine->attachAxis(axisY);
@@ -213,7 +411,17 @@ void PIDWidget::init()
     targetLine->attachAxis(axisY);
 
     chartView->setChart(chart);
-    chartView->setRenderHint(QPainter::Antialiasing);
+    scrollBar->setOrientation(Qt::Horizontal);
+
+    scrollBar->setMinimum(50);
+    scrollBar->setPageStep(scrollBar->width()+50);
+
+    auto * chartLayout = new QVBoxLayout(chartWidget);
+    chartLayout->addWidget(chartView);
+    chartLayout->addWidget(scrollBar);
+    chartLayout->addWidget(valueBrowser);
+
+//    chartView->setRenderHint(QPainter::Antialiasing);
 
     auto * groupFormLayout = new QFormLayout(pidValueGroup);
 
@@ -228,12 +436,16 @@ void PIDWidget::init()
 
     auto * vLayout = new QVBoxLayout(editWidget);
     vLayout->addWidget(settingGroup);
-    vLayout->addSpacing(50);
     vLayout->addWidget(pidValueGroup);
+    vLayout->addWidget(valueLabel);
+
+//    auto * chartLayout = new QVBoxLayout(chartWidget);
+//    chartLayout->addWidget(chartView);
+//    chartLayout->addWidget(slider);
 
     auto * hLayout = new QHBoxLayout(viewWidget);
     hLayout->addWidget(editWidget);
-    hLayout->addWidget(chartView);
+    hLayout->addWidget(chartWidget);
 
     auto * buttonLayout = new QHBoxLayout(buttonWidget);
     buttonLayout->addSpacing(10);
@@ -258,4 +470,16 @@ void PIDWidget::paintEvent(QPaintEvent * e)
     painter.setPen(Qt::NoPen);
     painter.setBrush(Qt::white);
     painter.drawRect(this->rect());
+}
+
+void PIDWidget::reset()
+{
+    serial->reset();
+    settingGroup->reset();
+    serial->setProtocol("read{"
+                        "float:2;"
+                        "}"
+                        "write{"
+                        "float:4;"
+                        "}");
 }

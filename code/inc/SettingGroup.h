@@ -28,6 +28,7 @@ public:
     SettingGroup(Serial * pSerial, QWidget * parent);
     void init();
     void updateSerialNameList();
+    void reset();
 };
 
 

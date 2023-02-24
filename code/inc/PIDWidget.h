@@ -14,6 +14,10 @@
 #include <QPushButton>
 #include "Serial.h"
 #include "SettingGroup.h"
+#include <QScrollBar>
+#include <QChartView>
+#include <QTextBrowser>
+#include <QLabel>
 
 class PIDWidget : public QWidget{
     Q_OBJECT
@@ -34,21 +38,33 @@ private:
     QPushButton * stopButton;
     QPushButton * clearButton;
     QPushButton * restartButton;
+    QScrollBar * scrollBar;
+    QChartView * chartView;
+    QTextBrowser * valueBrowser;
+    QLabel * maxLabel;
+    QLabel * minLabel;
 public:
     PIDWidget(Serial * pSerial, QWidget * parent = nullptr);
     void init();
     void paintEvent(QPaintEvent * e);
+    bool eventFilter(QObject *obj, QEvent *event);
 
     void updateCurve();
     void updateData();
+    void reset();
 private:
-    const int AXIS_MAX_Y = 15;
-    const int AXIS_MAX_X = 10;
+//    int AXIS_MAX_Y = 0;
+//    int AXIS_MAX_X = 50;
     float P = 0;
     float I = 0;
     float D = 0;
     float value = 0;
     float target = 0;
+    float max_value = 0;
+    float min_value = 0;
+    bool rollFlag = true;
+    bool clearFlag = false;
+    bool disableZoom = true;
 };
 
 

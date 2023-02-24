@@ -10,6 +10,9 @@
 #include <QFormLayout>
 #include <QPainter>
 #include <QFont>
+#include <QShortcut>
+
+#include <QDebug>
 
 DataWidget::DataWidget(Serial *pSerial, QWidget *parent) : QWidget(parent), serial(pSerial)
 {
@@ -31,6 +34,24 @@ DataWidget::DataWidget(Serial *pSerial, QWidget *parent) : QWidget(parent), seri
     this->init();
 
     connect(saveButton, &QPushButton::clicked, this, [=](){
+        QFileDialog save;
+        save.setWindowTitle("保存");
+        save.setDirectory(".");
+        save.setDefaultSuffix("txt");
+        save.setNameFilter("Text files (*.txt)");
+        if(save.exec() == QDialog::Accepted)
+        {
+            QString path = save.selectedFiles()[0];
+            QFile file(path);
+            file.open(QIODevice::WriteOnly);
+            file.write(textBrowser->toPlainText().toUtf8());
+        }
+    });
+
+    auto * shortcut = new QShortcut(this);
+    shortcut->setKey(QKeySequence("ctrl+s"));
+    shortcut->setAutoRepeat(false);
+    connect(shortcut, &QShortcut::activated, this, [=](){
         QFileDialog save;
         save.setWindowTitle("保存");
         save.setDirectory(".");
@@ -70,6 +91,14 @@ DataWidget::DataWidget(Serial *pSerial, QWidget *parent) : QWidget(parent), seri
     });
 
     connect(sendButton, &QPushButton::clicked, this, [=](){
+        auto data_ = textEdit->toPlainText();
+        sendSerialData(data_);
+    });
+
+    auto * shortcut1 = new QShortcut(this);
+    shortcut1->setKey(Qt::Key_Return);
+    shortcut1->setAutoRepeat(false);
+    connect(shortcut1, &QShortcut::activated, this, [=](){
         auto data_ = textEdit->toPlainText();
         sendSerialData(data_);
     });
@@ -136,7 +165,7 @@ void DataWidget::sendSerialData(QString & data_)
         }
         if(sendHex)
         {
-            sendData = QByteArray::fromHex(data_.toUtf8());
+            sendData = QByteArray::fromHex(data_.remove(' ').toUtf8());
             serial->getSerialPort()->write(sendData);
             return;
         }
@@ -318,4 +347,11 @@ void DataWidget::paintEvent(QPaintEvent * e)
     painter.setPen(Qt::NoPen);
     painter.setBrush(Qt::white);
     painter.drawRect(this->rect());
+}
+
+void DataWidget::reset()
+{
+    serial->reset();
+    settingGroup->reset();
+    serial->resetProtocol();
 }

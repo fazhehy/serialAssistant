@@ -42,6 +42,8 @@ public:
     void getSerialData();
     void sendSerialData(QString & data_);
     void showInHex();
+
+    void reset();
 private:
     QTimer * timer = nullptr;
     QString data;

@@ -122,6 +122,11 @@ void SettingGroup::init()
                                             "  border:1px solid rgba(228,228,228,1);\n"
                                             "  border-radius:5px 5px 0px 0px;\n"
                                             "  background-color: white;\n"
+                                            "}"
+                                            "QPushButton:pressed{"
+                                            "    background-color:rgb(14 , 135 , 228);"
+                                            "    padding-left:3px;"
+                                            "    padding-top:3px;"
                                             "}");
 
     this->setTitle("串口设置");
@@ -226,3 +231,7 @@ void SettingGroup::updateSerialNameList()
     }
 }
 
+void SettingGroup::reset()
+{
+    serialStateButton->setText("关闭");
+}

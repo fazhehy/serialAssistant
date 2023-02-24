@@ -20,7 +20,7 @@ find_package(Qt6 COMPONENTS
         REQUIRED)
 
 include_directories(inc)
-add_executable(serialAssistant WIN32 ${RC} main.cpp src/MainWindow.cpp inc/MainWindow.h src/Serial.cpp inc/Serial.h src/DataWidget.cpp inc/DataWidget.h src/PIDWidget.cpp inc/PIDWidget.h src/SettingGroup.cpp inc/SettingGroup.h)
+add_executable(serialAssistant ${RC} main.cpp src/MainWindow.cpp inc/MainWindow.h src/Serial.cpp inc/Serial.h src/DataWidget.cpp inc/DataWidget.h src/PIDWidget.cpp inc/PIDWidget.h src/SettingGroup.cpp inc/SettingGroup.h)
 target_link_libraries(serialAssistant
         Qt::Core
         Qt::Gui
