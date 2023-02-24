@@ -1,6 +1,6 @@
 # serialAssistant
 
-`serialAssistant`是我利用寒假完成的一个小作品，算是我**Qt**学习的毕业作品。我**C++、Qt**都是从寒假开始学起，**QSS**压根没学，所以界面有些瑕疵，请多多包涵。 如果发现bug， 请尽快提`issue`:love_letter:。
+`serialAssistant`是我利用寒假完成的一个小作品，算是我**Qt**学习的毕业作品。我**C++、Qt**都是从寒假开始学起，**QSS**压根没学，所以界面有些瑕疵，请多多包涵。 如果发现bug， 请尽快提`issue`:love_letter:。二更于2.24。
 
 ## 介绍
 
@@ -26,7 +26,7 @@ PID调参收发数据有一个通信协议，比野火的那个简单，但也�
 
 ## 如何使用
 
-[下载](https://github.com/fazhehy/serialAssistant/releases)`zip`后解压直接运行``serialAssisant.exe``即可。
+[下载](https://github.com/fazhehy/serialAssistant/releases/tag/v1.1.0)`zip`后解压直接运行``serialAssisant.exe``即可。
 
 `code`文件夹有源代码，可以在此基础上改进`serialAssisant`。
 
@@ -44,16 +44,36 @@ PID调参收发数据有一个通信协议，比野火的那个简单，但也�
 
 我写了一个serial类，实现了这个协议。有机会我会提交一个适用单片机的类文件(clion开发stm32用c++，模仿稚晖大佬)
 
-`PID调参`将接收单片机的两个`float`数据，分别是`vluae`、`target`。
+`PID调参`将接收单片机的两个`float`数据，分别是`value`、`target`。
 
 会发出四个`float`数据，分别是`target`、`P`、`I`、`D`。
 
 在按下功能键之后也会发送一些指令。如下
 
-> 0x00 重启
+> 0x01 重启
 >
-> 0x01 暂停
+> 0x02 暂停
+>
+> 0x03 重新开始
 
 > 再按下发送键之后，先会发送数据，然后发送重启指令。
 >
 > 之后我会提交一个单片机的example
+
+## 关于pid调试界面的一些操作
+
+- 单击表格会，停止滚动。
+- 停止滚动后，可拖动滚动条。
+- 停止滚动后，可按**ctrl+中键**缩放y轴。
+
+## 一些快捷键
+
+1.数据收发界面
+
+- enter 直接发送
+- ctrl+s 保存窗口
+
+2.pid调试界面
+
+- enter 直接发送
+
